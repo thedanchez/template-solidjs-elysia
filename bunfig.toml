@@ -1,0 +1,4 @@
+[test]
+# We only use 'bun test' for the backend since there are still gaps in Bun for fully supporting SolidJS. 
+# When Bun officially supports SolidJS, we can then use 'bun test' for everything and deprectate Vitest.
+root = "backend"

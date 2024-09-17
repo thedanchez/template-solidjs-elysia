@@ -1,0 +1,12 @@
+version: "3.4"
+
+networks:
+  web-app:
+
+services:
+  app:
+    build: .
+    networks:
+      - web-app
+    ports:
+      - "8000:8000"

@@ -1,0 +1,80 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Select the environment"
+        required: true
+        default: "qa"
+        type: choice
+        options:
+          - qa
+          - prod
+      git_hash:
+        description: "Optional git commit hash or branch (defaults to latest in main)"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    name: Build and Push Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.git_hash || 'main' }}
+      - name: Set Variables
+        id: vars
+        run: |
+          if [ "${{ github.event.inputs.git_hash }}" == "" ]; then
+            echo "No git_hash input provided, using latest commit in main branch"
+            GIT_HASH=${{ github.sha }}
+          else
+            echo "Using provided git hash"
+            GIT_HASH=${{ github.event.inputs.git_hash }}
+          fi
+          echo "GIT_HASH=$GIT_HASH" >> $GITHUB_OUTPUT
+      - name: Build Image
+        run: |
+          podman build -t app:${{ steps.vars.outputs.GIT_HASH }} \
+            --build-arg VERSION=$(echo ${{ steps.vars.outputs.GIT_HASH }} | cut -c1-7) \
+            .
+      # NOTE: The last two steps are only for template purposes. Post building the image, you should be pushing it to an
+      # image registry/repository which could be public facing or internal if you are a private organization.
+      # When you use this template, make sure to replace these steps with the appropriate ones for your use case.
+      - name: Save Image
+        run: |
+          podman save app:${{ steps.vars.outputs.GIT_HASH }} -o app_${{ steps.vars.outputs.GIT_HASH }}.tar
+      - name: Upload Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app_${{ steps.vars.outputs.GIT_HASH }}
+          path: app_${{ steps.vars.outputs.GIT_HASH }}.tar
+  # NOTE: Post building the image, you should be pulling it from where you pushed it to using whatever tool you use to
+  # deploy your application to your infrastructure (i.e. Kubernetes). This is just a template to show you where the deploy
+  # job would go.
+  deploy:
+    name: Deploy Image
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Set Variables
+        id: vars
+        run: |
+          if [ "${{ github.event.inputs.git_hash }}" == "" ]; then
+            echo "No git_hash input provided, using latest commit in main branch"
+            GIT_HASH=${{ github.sha }}
+          else
+            echo "Using provided git hash"
+            GIT_HASH=${{ github.event.inputs.git_hash }}
+          fi
+          echo "GIT_HASH=$GIT_HASH" >> $GITHUB_OUTPUT
+      - name: Download Image Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app_${{ steps.vars.outputs.GIT_HASH }}

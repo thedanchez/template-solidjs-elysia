@@ -1,0 +1,44 @@
+# Sandbox workflow to build and push ephemeral sandbox deployments on every pull request to the main branch.
+# This is useful for testing changes in a production-like environment before merging them into the main branch.
+name: Sandbox
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build and Push Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Build Image
+        run: |
+          podman build -t app:sandbox-${{ github.event.pull_request.number }} \
+            --build-arg VERSION=sandbox-${{ github.event.pull_request.number }} \
+            .
+      # NOTE: The last two steps are only for template purposes. Post building the image, you should be pushing it to an
+      # image registry/repository which could be public facing or internal if you are a private organization.
+      # When you use this template, make sure to replace these steps with the appropriate ones for your use case.
+      - name: Save Image
+        run: |
+          podman save app:sandbox-${{ github.event.pull_request.number }} -o app_sandbox_${{ github.event.pull_request.number }}.tar
+      - name: Upload Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app_sandbox_${{ github.event.pull_request.number }}
+          path: app_sandbox_${{ github.event.pull_request.number }}.tar
+  # NOTE: Post building the image, you should be pulling it from where you pushed it to using whatever tool you use to
+  # deploy your application to your infrastructure (i.e. Kubernetes). This is just a template to show you where the deploy
+  # job would go.
+  deploy:
+    name: Deploy Image
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download Image Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app_sandbox_${{ github.event.pull_request.number }}
